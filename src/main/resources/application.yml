@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: music-gateway
+
+zuul:
+  routes:
+    music:
+      url: http://musicbrainz.org/ws/2
+
+ribbon:
+  eureka:
+    enabled: false
