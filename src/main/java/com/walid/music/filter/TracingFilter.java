@@ -11,7 +11,6 @@ import org.springframework.stereotype.Component;
 
 import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.context.RequestContext;
-import com.netflix.zuul.exception.ZuulException;
 
 /**
  * Logs the received response code corresponding to the request identifiers
@@ -30,7 +29,7 @@ public class TracingFilter extends ZuulFilter {
 
     @Override
     public int filterOrder() {
-        return 0;
+        return 100;
     }
 
     @Override
@@ -39,7 +38,7 @@ public class TracingFilter extends ZuulFilter {
     }
 
     @Override
-    public Object run() throws ZuulException {
+    public Object run() {
         final RequestContext context = RequestContext.getCurrentContext();
 
         String requestID = UUID.randomUUID().toString();
@@ -47,7 +46,7 @@ public class TracingFilter extends ZuulFilter {
         MDC.put("requestID", requestID);
         MDC.put("requestURI", requestURI);
 
-        logger.info("Response received. status code: {}.", context.getResponseStatusCode());
+        logger.debug("Response received. status code: {}.", context.getResponseStatusCode());
 
         // Zuul ignore it anyway
         return null;
