@@ -22,7 +22,7 @@ public class LogUtils {
      *            requestURI
      */
     public static void setMDC(String requestURI) {
-        if (MDC.get(REQUEST_ID) == null) {
+        if (MDC.get(REQUEST_URI) == null || !MDC.get(REQUEST_URI).equals(requestURI)) {
             MDC.put(REQUEST_ID, UUID.randomUUID().toString());
             MDC.put(REQUEST_URI, normaliseURI(requestURI));
         }

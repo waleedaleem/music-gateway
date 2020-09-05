@@ -11,19 +11,28 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.zip.GZIPInputStream;
 
-import org.apache.commons.lang.StringUtils;
 import org.apache.tomcat.util.http.fileupload.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.configurationprocessor.json.JSONException;
 import org.springframework.boot.configurationprocessor.json.JSONObject;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.google.common.io.CharStreams;
 import com.netflix.config.DynamicIntProperty;
 import com.netflix.config.DynamicPropertyFactory;
+import com.netflix.util.Pair;
 import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.context.RequestContext;
 import com.netflix.zuul.exception.ZuulException;
@@ -43,6 +52,11 @@ public class EnrichFilter extends ZuulFilter {
             ZUUL_INITIAL_STREAM_BUFFER_SIZE, 8192);
     private static final List<String> enrichableRequestURIs = Collections.singletonList(
             "/music/artist");
+
+    @Autowired
+    private RestTemplateBuilder restTemplateBuilder;
+
+    private JSONObject jsonResponse;
 
     @Override
     public String filterType() {
@@ -66,8 +80,8 @@ public class EnrichFilter extends ZuulFilter {
             return false;
         }
 
-        String responseBody = extractResponseBody(context);
-        if (getEntityCount(responseBody) == 1) {
+        jsonResponse = extractJSONResponse(context);
+        if (getEntityCount(jsonResponse) == 1) {
             logger.debug("Response eligible for enrichment with more details");
             return true;
         }
@@ -81,26 +95,35 @@ public class EnrichFilter extends ZuulFilter {
      *            Zuul request context
      * @return response body string
      */
-    private String extractResponseBody(RequestContext context) {
+    private JSONObject extractJSONResponse(RequestContext context) {
         if (context.getResponseBody() != null) {
-            return context.getResponseBody();
+            return parseJSON(context.getResponseBody());
         } else if (context.getResponseDataStream() != null) {
             try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream(
                     STREAM_BUFFER_SIZE.get())) {
                 IOUtils.copy(context.getResponseDataStream(), outputStream);
                 final byte[] bytes = outputStream.toByteArray();
                 context.setResponseDataStream(new ByteArrayInputStream(bytes));
-                return CharStreams.toString(
-                        new InputStreamReader(
-                                new GZIPInputStream(new ByteArrayInputStream(bytes))));
+                return parseJSON(
+                        CharStreams.toString(
+                                new InputStreamReader(
+                                        new GZIPInputStream(new ByteArrayInputStream(bytes)))));
             } catch (IOException e) {
                 final String error = "Failed to extract response body";
                 logger.error(error, e);
                 context.setResponseStatusCode(SC_INTERNAL_SERVER_ERROR);
-                return StringUtils.EMPTY;
+                return null;
             }
         }
-        return StringUtils.EMPTY;
+        return null;
+    }
+
+    private JSONObject parseJSON(String strJSON) {
+        try {
+            return new JSONObject(strJSON);
+        } catch (JSONException e) {
+            return null;
+        }
     }
 
     /**
@@ -110,11 +133,10 @@ public class EnrichFilter extends ZuulFilter {
      *            response body in JSON format
      * @return entity count
      */
-    private int getEntityCount(String response) {
-        if (StringUtils.isNotBlank(response)) {
+    private int getEntityCount(JSONObject response) {
+        if (!Objects.isNull(response)) {
             try {
-                JSONObject result = new JSONObject(response);
-                return result.getInt("count");
+                return response.getInt("count");
             } catch (JSONException e) {
                 return Integer.MIN_VALUE;
             }
@@ -122,11 +144,36 @@ public class EnrichFilter extends ZuulFilter {
         return Integer.MIN_VALUE;
     }
 
+    private String extractEntityID(JSONObject response) throws JSONException {
+        return ((JSONObject) response.getJSONArray("artists").get(0)).getString("id");
+    }
+
     @Override
     public Object run() throws ZuulException {
-        logger.info("search returned a single entity. Fetching entity specific details...");
+        try {
+            logger.info("search returned a single entity. Fetching entity specific details...");
+            String entityID = extractEntityID(jsonResponse);
+            RequestContext context = RequestContext.getCurrentContext();
+            final UriComponentsBuilder uriBuilder = UriComponentsBuilder.fromUri(
+                    context.getRouteHost().toURI()).path("/release").queryParam("artist", entityID);
 
-        // TODO enrich response here
+            HttpHeaders headers = new HttpHeaders();
+            headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+            HttpEntity<String> entity = new HttpEntity<>("body", headers);
+
+            ResponseEntity<String> response = restTemplateBuilder.build().exchange(
+                    uriBuilder.toUriString(), HttpMethod.GET, entity, String.class);
+
+            context.setResponseStatusCode(response.getStatusCodeValue());
+            if (response.hasBody()) {
+                context.getZuulResponseHeaders().remove(new Pair<>("Content-Encoding", "gzip"));
+                context.setResponseGZipped(false);
+                context.setResponseDataStream(
+                        new ByteArrayInputStream(response.getBody().getBytes()));
+            }
+        } catch (Exception e) {
+            throw new ZuulException(e, SC_INTERNAL_SERVER_ERROR, e.getMessage());
+        }
 
         // Zuul ignore it anyway
         return null;
