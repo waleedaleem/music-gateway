@@ -1,4 +1,4 @@
-package com.walid.music.web;
+package com.walid.music.filter;
 
 import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.POST_TYPE;
 
@@ -6,6 +6,7 @@ import java.util.UUID;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 import com.netflix.zuul.ZuulFilter;
@@ -13,14 +14,14 @@ import com.netflix.zuul.context.RequestContext;
 import com.netflix.zuul.exception.ZuulException;
 
 /**
- * Intercepts the search response and retrieves artist's releases for searches yielding one artist
+ * Logs the received response code corresponding to the request identifiers
  * 
  * @author wmoustaf
  */
 @Component
-public class ResponseFilter extends ZuulFilter {
+public class TracingFilter extends ZuulFilter {
 
-    private static final Logger logger = LoggerFactory.getLogger(ResponseFilter.class);
+    private static final Logger logger = LoggerFactory.getLogger(TracingFilter.class);
 
     @Override
     public String filterType() {
@@ -43,9 +44,12 @@ public class ResponseFilter extends ZuulFilter {
 
         String requestID = UUID.randomUUID().toString();
         String requestURI = context.getRequest().getRequestURI();
+        MDC.put("requestID", requestID);
+        MDC.put("requestURI", requestURI);
 
-        logger.info("Served request ID=" + requestID + " - URI=" + requestURI);
+        logger.info("Response received. status code: {}.", context.getResponseStatusCode());
 
+        // Zuul ignore it anyway
         return null;
     }
 }
