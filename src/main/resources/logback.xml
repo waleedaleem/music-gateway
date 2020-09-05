@@ -10,7 +10,8 @@
             </pattern>
         </encoder>
     </appender>
-    <logger name="root" level="INFO"/>
+
+    <logger name="com.walid.music" level="DEBUG"/>
 
     <root level="INFO">
         <appender-ref ref="STDOUT"/>
