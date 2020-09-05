@@ -1,6 +1,7 @@
 package com.walid.music.filter;
 
 import static com.netflix.zuul.constants.ZuulConstants.ZUUL_INITIAL_STREAM_BUFFER_SIZE;
+import static com.walid.music.logging.LogUtils.normaliseURI;
 import static javax.servlet.http.HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
 import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.POST_TYPE;
 
@@ -10,14 +11,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.List;
-import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 
 import org.apache.commons.lang.StringUtils;
 import org.apache.tomcat.util.http.fileupload.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.boot.configurationprocessor.json.JSONException;
 import org.springframework.boot.configurationprocessor.json.JSONObject;
 import org.springframework.stereotype.Component;
@@ -28,6 +27,7 @@ import com.netflix.config.DynamicPropertyFactory;
 import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.context.RequestContext;
 import com.netflix.zuul.exception.ZuulException;
+import com.walid.music.logging.LogUtils;
 
 /**
  * Intercepts the search response and conditionally enriches it with more details. For instance,
@@ -56,13 +56,10 @@ public class EnrichFilter extends ZuulFilter {
 
     @Override
     public boolean shouldFilter() {
-        // TODO move MDC stuff to LogUtil class
         RequestContext context = RequestContext.getCurrentContext();
-        String requestID = UUID.randomUUID().toString();
         String requestURI = normaliseURI(context.getRequest().getRequestURI());
+        LogUtils.setMDC(requestURI);
 
-        MDC.put("requestID", requestID);
-        MDC.put("requestURI", requestURI);
         logger.debug("Checking response eligibility for enrichment");
 
         if (!enrichableRequestURIs.contains(requestURI)) {
@@ -75,21 +72,6 @@ public class EnrichFilter extends ZuulFilter {
             return true;
         }
         return false;
-    }
-
-    /**
-     * cleans up the redundant slash at the end of a URI if exists
-     *
-     * @param uri
-     *            end point uri
-     * @return the uri without redundant slash
-     */
-    private String normaliseURI(String uri) {
-        if (StringUtils.isNotBlank(uri) && uri.endsWith("/")) {
-            return uri.substring(0, uri.length() - 1);
-        } else {
-            return uri;
-        }
     }
 
     /**

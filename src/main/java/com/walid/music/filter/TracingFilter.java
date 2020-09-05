@@ -2,15 +2,13 @@ package com.walid.music.filter;
 
 import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.POST_TYPE;
 
-import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 
 import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.context.RequestContext;
+import com.walid.music.logging.LogUtils;
 
 /**
  * Logs the received response code corresponding to the request identifiers
@@ -40,13 +38,9 @@ public class TracingFilter extends ZuulFilter {
     @Override
     public Object run() {
         final RequestContext context = RequestContext.getCurrentContext();
+        LogUtils.setMDC(context.getRequest().getRequestURI());
 
-        String requestID = UUID.randomUUID().toString();
-        String requestURI = context.getRequest().getRequestURI();
-        MDC.put("requestID", requestID);
-        MDC.put("requestURI", requestURI);
-
-        logger.debug("Response received. status code: {}.", context.getResponseStatusCode());
+        logger.info("Response received. status code: {}.", context.getResponseStatusCode());
 
         // Zuul ignore it anyway
         return null;
