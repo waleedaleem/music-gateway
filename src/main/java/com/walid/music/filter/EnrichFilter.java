@@ -53,10 +53,14 @@ public class EnrichFilter extends ZuulFilter {
     private static final List<String> enrichableRequestURIs = Collections.singletonList(
             "/music/artist");
 
-    @Autowired
     private RestTemplateBuilder restTemplateBuilder;
 
     private JSONObject jsonResponse;
+
+    @Autowired
+    public EnrichFilter(RestTemplateBuilder restTemplateBuilder) {
+        this.restTemplateBuilder = restTemplateBuilder;
+    }
 
     @Override
     public String filterType() {
@@ -134,7 +138,7 @@ public class EnrichFilter extends ZuulFilter {
      * @return entity count
      */
     private int getEntityCount(JSONObject response) {
-        if (!Objects.isNull(response)) {
+        if (Objects.nonNull(response)) {
             try {
                 return response.getInt("count");
             } catch (JSONException e) {
