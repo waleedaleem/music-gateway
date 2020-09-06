@@ -37,4 +37,4 @@ CONTAINER ID        IMAGE                              COMMAND                  
 ```
 
 ## Browse to the home page
-![Home Page Image](home_page.png)
+![Home Page Image](home_page.JPG)
