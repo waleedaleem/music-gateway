@@ -6,4 +6,4 @@ EXPOSE 80
 ENTRYPOINT ["java"]
 CMD ["-jar", "/app/${project.name}-${project.version}.jar"]
 RUN apk --update --no-cache add curl
-HEALTHCHECK CMD curl -f http://localhost:80/health || exit 1
+HEALTHCHECK CMD curl -f http://localhost:80/actuator/health || exit 1
